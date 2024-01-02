@@ -12,14 +12,17 @@ fun main(args: Array<String>) {
     val parser = RecDescentClauseParser()
     val ec = generateRootContext()
     val input = object {}.javaClass.getResource("/main.sp")?.readText() ?: ""
-    measureRuntime {
-        val tokens = tokenizer.tokenize(input)
-
-        val parser = parser.parse(tokens)
-        measureRuntime {
-            parser.execute(ec)
-        }
+    val tokens = measureRuntime("Tokenizing") {
+        tokenizer.tokenize(input)
     }
+    val syntaxTree = measureRuntime("Parsing") {
+        parser.parse(tokens)
+    }
+
+    measureRuntime("Execution") {
+        syntaxTree.execute(ec)
+    }
+
 
 }
 
@@ -31,6 +34,12 @@ fun generateRootContext() = ImmutableEvaluationContext().apply {
         println(it.fetchValue("value"))
     }))
 
+    assign("listGet", InvokableFunction(null, listOf("list", "idx"), native {
+        val list = it.fetchValue("list") as List<*>
+        val idx = it.fetchValue("idx") as Int
+        return@native list.get(idx) ?: Unit
+    }))
+
     assign("last", InvokableFunction(null, listOf("value"), native {
         val value = it.fetchValue("value")
         if (value is List<*>) {
@@ -40,7 +49,13 @@ fun generateRootContext() = ImmutableEvaluationContext().apply {
     }))
 
     assign("length", InvokableFunction(null, listOf("value"), native {
-        return@native (it.fetchValue("value") as? String)!!.length
+        val value = it.fetchValue("value")
+        if (value is String) {
+            return@native value.length
+        } else if (value is List<*>) {
+            return@native value.size
+        }
+        throw RuntimeException("Invalid item to call length on")
     }))
 
     assign("split", InvokableFunction(null, listOf("separator", "input"), native {
@@ -87,6 +102,16 @@ fun generateRootContext() = ImmutableEvaluationContext().apply {
             throw RuntimeException("Operation not suppourted -- ${lhs} @! ${rhs}")
         }
     })
+    assign(">", object : Invokable {
+        override fun invoke(evaluationContext: EvaluationContext, args: List<Any>): Any {
+            val lhs = (args[0] as ExpressionNode).evaluate(evaluationContext)
+            val rhs = (args[1] as ExpressionNode).evaluate(evaluationContext)
+            if (lhs is Number && rhs is Number) {
+                return lhs.toDouble() > rhs.toDouble()
+            }
+            throw RuntimeException("Operation not suppourted -- ${lhs} @! ${rhs}")
+        }
+    })
     assign("+", object : Invokable {
         override fun invoke(evaluationContext: EvaluationContext, args: List<Any>): Any {
             val lhs = (args[0] as ExpressionNode).evaluate(evaluationContext)
@@ -97,6 +122,30 @@ fun generateRootContext() = ImmutableEvaluationContext().apply {
                 return lhs.toDouble() + rhs.toDouble()
             } else if (lhs is String) {
                 return lhs + rhs.toString()
+            } else if (lhs is List<*> && rhs is List<*>) {
+                return lhs + rhs
+            } else if (lhs is List<*>) {
+                return lhs + rhs
+            } else if (rhs is List<*>) {
+                return listOf(lhs) + rhs
+            }
+            throw RuntimeException("Operation not suppourted -- ${lhs} + ${rhs}")
+        }
+    })
+    assign("-", object : Invokable {
+        override fun invoke(evaluationContext: EvaluationContext, args: List<Any>): Any {
+            val lhs = (args[0] as ExpressionNode).evaluate(evaluationContext)
+            val rhs = (args[1] as ExpressionNode).evaluate(evaluationContext)
+            if (lhs is Int && rhs is Int) {
+                return lhs - rhs
+            } else if (lhs is Number && rhs is Number) {
+                return lhs.toDouble() - rhs.toDouble()
+            } else if (lhs is List<*> && rhs is List<*>) {
+                return lhs - rhs
+            } else if (lhs is List<*>) {
+                return lhs - rhs
+            } else if (rhs is List<*>) {
+                return listOf(lhs) - rhs
             }
             throw RuntimeException("Operation not suppourted -- ${lhs} + ${rhs}")
         }
@@ -131,11 +180,12 @@ fun generateRootContext() = ImmutableEvaluationContext().apply {
 
 //defaultFirehoseEventDispatcher().dispatch(event: SaraEvent(tId: t_id, pId: p_id, action: SaraAction.Click, clickOrigin: "Search", assetId: assetId, platform: "iOS", userId: userId))
 
-private inline fun measureRuntime(func: () -> Unit) {
+private inline fun <T> measureRuntime(name: String, func: () -> T): T {
     val start = System.currentTimeMillis()
-    func()
+    val res = func()
     val end = System.currentTimeMillis()
-    println("Took ${end-start}ms")
+    println("$name took ${end-start}ms")
+    return res
 }
 
 fun fetchBasicMemory(): MutableMap<String, Any> {
