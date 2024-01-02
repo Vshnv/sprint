@@ -99,23 +99,7 @@ private class ClauseRecDescentGrammar(private val tokenTrack: TokenTrack) {
 
 
     fun expression(): ExpressionNode {
-        return assignment()
-    }
-
-    private fun assignment(): ExpressionNode {
-        val lhs = or()
-        spaces()
-        if (matchCurrentType(TokenType.ASSIGN)) {
-            spacesAndLines()
-            val rhs = or()
-            if (lhs is IdentifierNode) {
-                return AssignNode(null, lhs.value, rhs)
-            } else if (lhs is ContextualNode && lhs.expressionNode is IdentifierNode) {
-                return AssignNode(lhs.contextNode, lhs.expressionNode.value, rhs)
-            }
-            throw ParseException("Invalid node at Assignment operation")
-        }
-        return lhs
+        return or()
     }
 
     private fun or(): ExpressionNode {
