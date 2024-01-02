@@ -238,29 +238,33 @@ private class ClauseRecDescentGrammar(private val tokenTrack: TokenTrack) {
 
     private fun invocation(): ExpressionNode {
         var operand = bracket()
-        while (matchCurrentType(TokenType.LPAR)) {
-            val args = mutableListOf<ExpressionNode>()
-            spacesAndLines()
-            while (!matchCurrentType(TokenType.RPAR)) {
-                args.add(expression())
-                spaces()
-                if (!matchCurrentType(TokenType.COMMA) && tokenTrack.currentToken?.type != TokenType.RPAR) {
-                    throw ParseException("Invalid separator in function invocation")
-                }
-                spacesAndLines()
-            }
-            operand = InvocationNode(operand, args)
+        do {
             spaces()
-        }
-        spaces()
-        val position = tokenTrack.cursorIndex
-        if (matchCurrentType(TokenType.LBRAC) && spaces() != null && matchCurrentType(TokenType.LPAR)) {
-            tokenTrack.moveTo(position)
-            val function = fundef()
-            operand = InvocationNode(operand, listOf(function))
-        } else {
-            tokenTrack.moveTo(position)
-        }
+            while (matchCurrentType(TokenType.LPAR)) {
+                val args = mutableListOf<ExpressionNode>()
+                spacesAndLines()
+                while (!matchCurrentType(TokenType.RPAR)) {
+                    args.add(expression())
+                    spaces()
+                    if (!matchCurrentType(TokenType.COMMA) && tokenTrack.currentToken?.type != TokenType.RPAR) {
+                        throw ParseException("Invalid separator in function invocation")
+                    }
+                    spacesAndLines()
+                }
+                operand = InvocationNode(operand, args)
+                spaces()
+            }
+            spaces()
+            val position = tokenTrack.cursorIndex
+            if (matchCurrentType(TokenType.LBRAC) && spaces() != null && matchCurrentType(TokenType.LPAR)) {
+                tokenTrack.moveTo(position)
+                val function = fundef()
+                operand = InvocationNode(operand, listOf(function))
+            } else {
+                tokenTrack.moveTo(position)
+            }
+            spaces()
+        } while (tokenTrack.currentToken?.type == TokenType.LPAR)
         return operand
     }
 
